@@ -2,15 +2,22 @@
 _temp="./download/dialog.$$"
 _error="./.error.out"
 
-# load network and chain info
-network=`cat .network`
-chain=$(sudo -bitcoin ${network}-cli -datadir=/home/bitcoin/.${network} getblockchaininfo | jq -r '.chain')
+# load raspiblitz config data (with backup from old config)
+source /home/admin/raspiblitz.info
+source /mnt/hdd/raspiblitz.conf
+if [ ${#network} -eq 0 ]; then network=`cat .network`; fi
+if [ ${#network} -eq 0 ]; then network="bitcoin"; fi
+if [ ${#chain} -eq 0 ]; then
+  echo "gathering chain info ... please wait"
+  chain=$(${network}-cli getblockchaininfo | jq -r '.chain')
+fi
 
 echo ""
 echo "*** Precheck ***"
+echo "please wait a moment ..."
 
 # check if chain is in sync
-chainInSync=$(lncli --chain=${network} getinfo | grep '"synced_to_chain": true' -c)
+chainInSync=$(lncli --chain=${network} --network=${chain}net getinfo | grep '"synced_to_chain": true' -c)
 if [ ${chainInSync} -eq 0 ]; then
   echo "!!!!!!!!!!!!!!!!!!!"
   echo "FAIL - 'lncli getinfo' shows 'synced_to_chain': false"
@@ -23,7 +30,7 @@ fi
 
 # check number of connected peers
 echo "check for open channels"
-openChannels=$(sudo -u bitcoin /usr/local/bin/lncli --chain=${network} listchannels 2>/dev/null | grep chan_id -c)
+openChannels=$(sudo -u bitcoin /usr/local/bin/lncli --chain=${network} --network=${chain}net listchannels 2>/dev/null | grep chan_id -c)
 if [ ${openChannels} -eq 0 ]; then
   echo ""
   echo "!!!!!!!!!!!!!!!!!!!"
@@ -71,13 +78,15 @@ fi
 # TODO: maybe try/show the decoded info first by using https://api.lightning.community/#decodepayreq
 
 # build command
-command="lncli --chain=${network} sendpayment --pay_req=${invoice}"
+command="lncli --chain=${network} --network=${chain}net sendpayment --force --pay_req=${invoice}"
 
 # info output
 clear
-echo "******************************"
+echo "************************************************************"
 echo "Pay Invoice / Payment Request"
-echo "******************************"
+echo "This script is as an example how to use the lncli interface."
+echo "Its not optimized for performance or error handling."
+echo "************************************************************"
 echo ""
 echo "COMMAND LINE: "
 echo $command
@@ -91,9 +100,15 @@ error=`cat ${_error}`
 #echo "result(${result})"
 #echo "error(${error})"
 
+resultIsError=$(echo "${result}" | grep -c "payment_error")
+if [ ${resultIsError} -gt 0 ]; then
+  error="${result}"
+fi
+
 if [ ${#error} -gt 0 ]; then
   echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
   echo "FAIL"
+  echo "try with a wallet app or the RTL WebGUI (see services)"
   echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
   echo "${error}"
 else

@@ -1,18 +1,22 @@
 #!/bin/bash
 echo ""
 
-# *** BITCOIN ***
+## get basic info
+source /home/admin/raspiblitz.info
+
+# *** BITCOIN (just mainnet) ***
 bitcoinList="" # url to list with other sources
-bitcoinUrl="ftp://anonymous:anonymous@91.83.237.185:21/raspiblitz-bitcoin-2018-07-16"
-bitcoinSize=231000000 # 231235816-tolerance
+#bitcoinUrl="ftp://anonymous:anonymous@91.83.237.185:21/raspiblitz-bitcoin-2018-07-16"
+bitcoinUrl="ftp://f00f39c4:download@w0189aba.kasserver.com/"
+bitcoinSize=253000000 # 253827180-tolerance
 
 # *** LITECOIN ***
 litecoinList="" # url to list with other sources
-litecoinUrl="ftp://anonymous:anonymous@ftp.rotzoll.de/pub/raspiblitz-litecoin-2018-07-29"
-litecoinSize=19180000 # 19184960-tolerance 
+litecoinUrl="ftp://anonymous:anonymous@ftp.rotzoll.de/pub/raspiblitz-litecoin-2018-11-30"
+litecoinSize=22220000 # 22221160-tolerance
 
-# load network
-network=`cat .network`
+# NOTE TO GET THE SIZE RIGHT: for new download add 9999999999 as size. Run download.
+# When finished the warning comes up and behind WARNING: copy that number
 
 # settings based on network
 list=$bitcoinList
@@ -28,7 +32,6 @@ fi
 name="Download"
 targetDir="/mnt/hdd/download/"
 targetSize=$size
-maxTimeoutLoops=100000
 command="sudo wget -c -r -P ${targetDir} -q --show-progress ${url}"
 
 # starting session if needed
@@ -48,8 +51,6 @@ sleep 3
 # monitor session
 screenDump="... started ..."
 actualSize=0
-timeout=1
-timeoutInfo="-"
 while :
   do
 
@@ -57,7 +58,6 @@ while :
     screen -wipe 1>/dev/null
     isRunning=$( screen -S ${name} -ls | grep "${name}" -c )
     if [ ${isRunning} -eq 0 ]; then
-      timeout=0
       echo "OK - session finished"
       break
     fi
@@ -68,36 +68,21 @@ while :
       freshSize=0
     fi
     progress=$(echo "scale=2; $freshSize*100/$targetSize" | bc)
-    echo $progress > '.${name}.progress'
+    echo $progress > ".${name}.progress"
 
-    # detect if since last loop any progress occured
-    if [ ${actualSize} -eq ${freshSize} ]; then
-      timeoutInfo="${timeout}/${maxTimeoutLoops}"
-      timeout=$(( $timeout + 1 ))
-    else
-      timeout=1
-      timeoutInfo="no timeout detected"
-    fi
     actualSize=$freshSize
-
-    # detect if mx timeout loop limit is reached
-    if [ ${timeout} -gt ${maxTimeoutLoops} ]; then
-      echo "FAIL - download hit timeout"
-      break
-    fi
 
     # display info screen
     clear
     echo "****************************************************"
     echo "Monitoring Screen Session: ${name}"
     echo "Progress: ${progress}% (${actualSize} of ${targetSize})"
-    echo "Timeout: ${timeoutInfo}"
     echo "If needed press key x to stop ${name}"
     echo "NOTICE: This can take multiple hours or days !!"
     echo "Its OK to close terminal now and SSH back in later."
     echo "****************************************************"
     screen -S ${name} -X hardcopy .${name}.out
-    newScreenDump=$(cat .Download.out | grep . | tail -8)
+    newScreenDump=$(cat .${name}.out | grep . | tail -8)
     if [ ${#newScreenDump} -gt 0 ]; then
       screenDump=$newScreenDump
     fi
@@ -126,7 +111,7 @@ if [ ${isRunning} -eq 1 ]; then
   echo "killing screen session PID(${sessionPID})"
   # kill all child processes of screen sceesion
   pkill -P ${sessionPID}
-  echo "proccesses klilled"
+  echo "proccesses killed"
   sleep 3
  # tell the screen session to quit and wait a bit
   screen -S ${name} -X quit 1>/dev/null
@@ -153,10 +138,10 @@ if [ ${finalSize} -lt ${targetSize} ]; then
  # Download failed
   sleep 3
   echo -ne '\007'
-  dialog --title " WARNING " --yesno "The download failed or is not complete. Maybe try again (later). Do you want keep already downloaded data for next try?" 8 57
+  dialog --title " WARNING (${finalSize}) " --yesno "The download failed or is not complete. Maybe try again (later). Do you want keep already downloaded data for next try?" 8 57
   response=$?
   case $response in
-    1) sudo rm -rf ${targetDir} ;;
+    1) sudo rm -rf /mnt/hdd/download ;;
   esac
   ./00mainMenu.sh
   exit 1;
@@ -168,7 +153,11 @@ else
   sudo mv ${targetDir}${targetPath} /mnt/hdd/${network}
   echo "OK"
 
-  # continue setup
-  ./60finishHDD.sh
+  if [ ${setupStep} -lt 100 ]; then
+    # set SetupState
+    sudo sed -i "s/^setupStep=.*/setupStep=50/g" /home/admin/raspiblitz.info
+    # continue setup
+    ./60finishHDD.sh
+  fi
 
 fi

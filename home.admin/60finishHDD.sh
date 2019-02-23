@@ -1,8 +1,8 @@
-#!/bin/sh
+#!/bin/bash
 echo ""
 
-# load network
-network=`cat .network`
+## get basic info
+source /home/admin/raspiblitz.info
 
 echo "*** Checking HDD ***"
 mountOK=$(df | grep -c /mnt/hdd)
@@ -24,7 +24,7 @@ if [ ${mountOK} -eq 1 ]; then
      exit 1
    fi
    sudo cp /home/admin/assets/${network}.conf /mnt/hdd/${network}/${network}.conf
-   sudo mkdir /home/admin/.${network}
+   sudo mkdir /home/admin/.${network} 2>/dev/null
    sudo cp /home/admin/assets/${network}.conf /home/admin/.${network}/${network}.conf
    sudo ln -s /mnt/hdd/${network} /home/bitcoin/.${network}
    sudo mkdir /mnt/hdd/lnd
@@ -44,13 +44,11 @@ if [ ${mountOK} -eq 1 ]; then
    sudo systemctl daemon-reload
    sudo systemctl enable ${network}d.service
    sudo systemctl start ${network}d.service
-   echo "Giving ${network}d service 180 seconds to init - please wait ..."	
-   sleep 180
-   echo "OK - ${network}d started"
-   sleep 2 
+   echo "Started ... wait 10 secs"	
+   sleep 10
 
    # set SetupState
-   echo "60" > /home/admin/.setup
+   sudo sed -i "s/^setupStep=.*/setupStep=60/g" /home/admin/raspiblitz.info
 
    ./10setupBlitz.sh
 
